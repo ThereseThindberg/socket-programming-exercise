@@ -1,0 +1,51 @@
+import socket
+
+def create_socket():
+    return socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+
+#associate socket with address of server
+def bind_socket(sock,host,port):
+    sock.bind((host,port))
+
+
+def listen_for_connection(sock):
+    sock.listen()
+    #printing ip adress and portnumber of server
+    print(f"Server listening on {sock.getsockname()}")  
+
+
+def accept_connection(sock):
+    conn,addr=sock.accept()
+    print(f"Connected with {addr}")
+    return conn,addr
+
+#Communicate with the client
+def handle_client(conn):
+    try:
+        while True:
+            data=conn.recv(1024)
+            if not data:
+                break
+            conn.sendall(data)
+    except Exception as e:
+        print("Error during client communication:", e)
+
+def close_socket(sock):
+    sock.close()
+
+def main():
+    host='127.0.0.1'
+    port=65432
+    server_socket=create_socket()
+    try: 
+        bind_socket(server_socket,host,port)
+        listen_for_connection(server_socket)
+        conn,addr=accept_connection(server_socket)
+        handle_client(conn)
+    except Exception as e:
+        print("Server error:", e)
+    finally:
+        close_socket(server_socket)
+
+if __name__ =="__main__":
+    main()
