@@ -17,7 +17,7 @@ def recieve_data(sock, buffer_size = 4096):
 def main():
     host = '127.0.0.1'
     port = 65432
-    message = "Hello, world"
+    message = input("enter calculator command: ")
     try:
         sock = create_client_socket()
         connect_to_server(sock, host, port)
@@ -32,3 +32,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
