@@ -1,4 +1,6 @@
 import socket
+import sys
+
 
 is_on = False
 channels = 10
@@ -34,6 +36,19 @@ def close_socket(sock):
     sock.close()
     print("Server is closed")
 
+def tv_menu():
+    return(
+        "Supported commands:\n"
+            "- version\n"
+            "- turn_on\n"
+            "- turn_off\n"
+            "- status\n"
+            "- get_channel\n"
+            "- get_channels\n"
+            "- set_channel <number>\n"
+            "- help\n"
+
+    )
 #For handeling commands in different versions
 def handle_command(command:str):
     global is_on, current_channel, channels
@@ -41,15 +56,17 @@ def handle_command(command:str):
     Support verion, echo, and basic calculator commands
     """
 
-    parts = command.strip().split(" ", 1)
-    if not parts:
-        return "Error:No command received"
+    parts = command.strip().split(" ", 1)   
+    if not parts or not parts[0].strip(): 
+        return ""     #tom komando gir ingen respons
+    
     cmd=parts[0].lower()
+    args = parts[1] if len(parts) > 1 else ""
 
-    if len(parts)>1:
-        args = parts[1]
-    else:
-        args=""
+
+    
+    if not is_on and cmd != "turn_on": 
+        return "TV is off. Only command allowed is turn_on"
 
     if cmd=="version":
         return "TCP TV v1.0"
@@ -57,7 +74,7 @@ def handle_command(command:str):
     #Endret kode
     elif cmd == "turn_on":
         is_on = True
-        return "TV turned ON"
+        return "TV turned ON\n" + tv_menu()
 
     elif cmd == "turn_off":
         is_on = False
@@ -84,27 +101,18 @@ def handle_command(command:str):
             return "Usage: set_channel <number>"
         c = int(args)   #gjør om "3" til heltall
         if 1 <= c <= channels:  #er kanalnummeret mellom 1 og antall kanaler? 11?
-            current_channel = c  #setter til nye kanalen
+            current_channel = c  #setter til nye kanalen, når tven skrur seg av vil dette bli husket
             return f"Channel set to {current_channel}"
         else:
             return f"Invalid channel. Allowed: 1-{channels}"
-
+    
     elif cmd == "help":
-        return (
-            "Supported commands:\n"
-            "- quit\n"
-            "- version\n"
-            "- turn_on\n"
-            "- turn_off\n"
-            "- status\n"
-            "- get_channel\n"
-            "- get_channels\n"
-            "- set_channel <number>\n"
-            "- help\n"
-        )
+        return tv_menu()
 
+    
     else:
         return "Error: Unknown command"
+
 
 #Trenger ikke regne ut noe så disse funksjonene kan slettes
 def handle_add(args):
@@ -170,18 +178,18 @@ def handle_client(conn):
 
 def main():
     host = '127.0.0.1'
-    port=65432
+    port= int(sys.argv[1]) if len(sys.argv) > 1 else 1238
     server_socket=create_socket()
     try: 
         bind_socket(server_socket,host,port)
         listen_for_connection(server_socket)
-        conn,addr=accept_connection(server_socket)
+        conn,addr=accept_connection(server_socket)   #accepting one connection at a time
         print(f"Server connected with{addr}")
-        conn.sendall(b"Welcome to TCP Smart TV server. Type 'quit' to exit.\n")
+        conn.sendall(b"TV is off. only command allowed id turn_on\n")
         while True:
-            command=receive_command(conn)
-            if not command or command.lower()=="quit":
-                conn.sendall(b"Goodbye!\n")
+            command=receive_command(conn)   
+            if not command or command.lower()=="turn_off":
+                conn.sendall(b"The TV is turned off, Goodbye!\n")
                 break
             response=handle_command(command)
             conn.sendall((response).encode())
