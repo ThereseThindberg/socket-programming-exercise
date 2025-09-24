@@ -1,5 +1,9 @@
 import socket
 
+is_on = False
+channels = 10
+current_channel = 1
+
 def create_socket():
     return socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 
@@ -7,28 +11,32 @@ def create_socket():
 def bind_socket(sock,host,port):
     sock.bind((host,port))
 
-
 def listen_for_connection(sock):
     sock.listen()
     #printing ip adress and portnumber of server
     print(f"Server listening on {sock.getsockname()}")  
-
 
 def accept_connection(sock):
     conn,addr=sock.accept()
     print(f"Connected with {addr}")
     return conn,addr
 
-
-
-
+def receive_command(conn):
+    try:
+        data=conn.recv(1024)
+        if not data:
+            return None
+        return data.decode().strip()
+    except:
+        return "error during communication"
 
 def close_socket(sock):
     sock.close()
-
+    print("Server is closed")
 
 #For handeling commands in different versions
 def handle_command(command:str):
+    global is_on, current_channel, channels
     """
     Support verion, echo, and basic calculator commands
     """
@@ -42,33 +50,63 @@ def handle_command(command:str):
         args = parts[1]
     else:
         args=""
+
     if cmd=="version":
-            return "TCP calculator v1.0"
-    elif cmd=="echo":
-        if args:
-            return args
+        return "TCP TV v1.0"
+
+    #Endret kode
+    elif cmd == "turn_on":
+        is_on = True
+        return "TV turned ON"
+
+    elif cmd == "turn_off":
+        is_on = False
+        return "TV turned OFF"
+
+    elif cmd == "status":
+        return "ON" if is_on else "OFF"
+
+    elif cmd == "get_channel":
+        if not is_on:
+            return "TV is OFF"
+        return f"Current channel: {current_channel}"
+
+    elif cmd == "get_channels":
+        if not is_on:
+            return "TV is OFF"
+        return f"Total channels: {channels}"
+
+    elif cmd == "set_channel":  #vis tv ikke er på, returner at den er av
+        if not is_on:
+            return "TV is OFF"
+        if not args.isdigit():   #sjekker om argumentet etter komandoen er et tall for å bytte kanal
+            #isdigit er python komando som returnerer true vis det er tall og false ellers
+            return "Usage: set_channel <number>"
+        c = int(args)   #gjør om "3" til heltall
+        if 1 <= c <= channels:  #er kanalnummeret mellom 1 og antall kanaler? 11?
+            current_channel = c  #setter til nye kanalen
+            return f"Channel set to {current_channel}"
         else:
-            return "warning:missing message"
-    elif cmd=="add":
-        return handle_add(args)
-    elif cmd=="sub":
-        return handle_sub(args)
-    elif cmd=="mul":
-        return handle_mul(args)
-    elif cmd=="div":
-        return handle_div(args)
-    elif cmd=="help":
+            return f"Invalid channel. Allowed: 1-{channels}"
+
+    elif cmd == "help":
         return (
-            "Supported commands: \n"
-            "-quit\n"
-            "-version\n"
-            "-echo\n"
-            "-basic calculator commands\n"
-            "-help\n"
+            "Supported commands:\n"
+            "- quit\n"
+            "- version\n"
+            "- turn_on\n"
+            "- turn_off\n"
+            "- status\n"
+            "- get_channel\n"
+            "- get_channels\n"
+            "- set_channel <number>\n"
+            "- help\n"
         )
+
     else:
-        return "Error:Unknown command"
-    
+        return "Error: Unknown command"
+
+#Trenger ikke regne ut noe så disse funksjonene kan slettes
 def handle_add(args):
     try:
         number=args.split()
@@ -80,7 +118,7 @@ def handle_add(args):
         return str(result)
     except:
         return "Error:Invalid argements"
-    
+
 def handle_sub(args):
     try:
         number=args.split()
@@ -104,7 +142,7 @@ def handle_mul(args):
         return str(result)
     except:
         return "Error:Invalid argements"
-    
+
 def handle_div(args):
     try:
         number=args.split()
@@ -116,8 +154,7 @@ def handle_div(args):
         return str(result)
     except:
         return "Error:Invalid argements"
-    
-    
+
 #Communicate with the client
 def handle_client(conn):
     try:
@@ -131,24 +168,29 @@ def handle_client(conn):
     except Exception as e:
         print("Error during client communication:", e)
 
-    
 def main():
-        host = '127.0.0.1'
-        port=65432
-        server_socket=create_socket()
-        try: 
-            bind_socket(server_socket,host,port)
-            listen_for_connection(server_socket)
-            conn,addr=accept_connection(server_socket)
-            handle_client(conn)
-        except Exception as e:
-            print("Server error:", e)
-        finally:
-            close_socket(server_socket)
+    host = '127.0.0.1'
+    port=65432
+    server_socket=create_socket()
+    try: 
+        bind_socket(server_socket,host,port)
+        listen_for_connection(server_socket)
+        conn,addr=accept_connection(server_socket)
+        print(f"Server connected with{addr}")
+        conn.sendall(b"Welcome to TCP Smart TV server. Type 'quit' to exit.\n")
+        while True:
+            command=receive_command(conn)
+            if not command or command.lower()=="quit":
+                conn.sendall(b"Goodbye!\n")
+                break
+            response=handle_command(command)
+            conn.sendall((response).encode())
+    except:
+        print("Server error")
+    finally:
+        close_socket(server_socket)
 
 if __name__ =="__main__":
     main()
 
-        
-
-
+    
