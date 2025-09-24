@@ -1,10 +1,10 @@
 import socket
 import sys
+from smart_tv import SmartTV
+
+tv = SmartTV()
 
 
-is_on = False
-channels = 10
-current_channel = 1
 
 def create_socket():
     return socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -50,118 +50,44 @@ def tv_menu():
 
     )
 #For handeling commands in different versions
-def handle_command(command:str):
-    global is_on, current_channel, channels
-    """
-    Support verion, echo, and basic calculator commands
-    """
-
-    parts = command.strip().split(" ", 1)   
-    if not parts or not parts[0].strip(): 
-        return ""     #tom komando gir ingen respons
-    
-    cmd=parts[0].lower()
+def handle_command(command: str):
+    parts = command.strip().split(" ", 1)
+    cmd = parts[0].lower()
     args = parts[1] if len(parts) > 1 else ""
 
-
-    
-    if not is_on and cmd != "turn_on": 
+    if not tv.is_on and cmd != "turn_on":
         return "TV is off. Only command allowed is turn_on"
 
-    if cmd=="version":
+    if cmd == "version":
         return "TCP TV v1.0"
-
-    #Endret kode
     elif cmd == "turn_on":
-        is_on = True
-        return "TV turned ON\n" + tv_menu()
-
+        tv.turn_on()
+        return "TV turned ON\n" + tv.get_menu()
     elif cmd == "turn_off":
-        is_on = False
+        tv.turn_off()
         return "TV turned OFF"
-
     elif cmd == "status":
-        return "ON" if is_on else "OFF"
-
+        return tv.get_status()
     elif cmd == "get_channel":
-        if not is_on:
-            return "TV is OFF"
-        return f"Current channel: {current_channel}"
-
+        return f"Current channel: {tv.get_channel()}"
     elif cmd == "get_channels":
-        if not is_on:
-            return "TV is OFF"
-        return f"Total channels: {channels}"
-
-    elif cmd == "set_channel":  #vis tv ikke er på, returner at den er av
-        if not is_on:
-            return "TV is OFF"
-        if not args.isdigit():   #sjekker om argumentet etter komandoen er et tall for å bytte kanal
-            #isdigit er python komando som returnerer true vis det er tall og false ellers
+        return f"Total channels: {tv.get_channels()}"
+    elif cmd == "set_channel":
+        if not args.isdigit():
             return "Usage: set_channel <number>"
-        c = int(args)   #gjør om "3" til heltall
-        if 1 <= c <= channels:  #er kanalnummeret mellom 1 og antall kanaler? 11?
-            current_channel = c  #setter til nye kanalen, når tven skrur seg av vil dette bli husket
-            return f"Channel set to {current_channel}"
+        number = int(args)
+        if tv.set_channel(number):
+            return f"Channel set to {number}"
         else:
-            return f"Invalid channel. Allowed: 1-{channels}"
-    
+            return f"Invalid channel. Allowed: 1-{tv.get_channels()}"
     elif cmd == "help":
-        return tv_menu()
-
-    
+        return tv.get_menu()
     else:
         return "Error: Unknown command"
 
 
-#Trenger ikke regne ut noe så disse funksjonene kan slettes
-def handle_add(args):
-    try:
-        number=args.split()
-        if len(number)!=2:
-            return "Error:Expected 2 arguments"
-        x=int(number[0])
-        y=int(number[1])
-        result=x+y
-        return str(result)
-    except:
-        return "Error:Invalid argements"
 
-def handle_sub(args):
-    try:
-        number=args.split()
-        if len(number)!=2:
-            return "Error:Expected 2 arguments"
-        x=int(number[0])
-        y=int(number[1])
-        result=x-y
-        return str(result)
-    except:
-        return "Error:Invalid argements"
 
-def handle_mul(args):
-    try:
-        number=args.split()
-        if len(number)!=2:
-            return "Error:Expected 2 arguments"
-        x=int(number[0])
-        y=int(number[1])
-        result=x*y
-        return str(result)
-    except:
-        return "Error:Invalid argements"
-
-def handle_div(args):
-    try:
-        number=args.split()
-        if len(number)!=2:
-            return "Error:Expected 2 arguments"
-        x=int(number[0])
-        y=int(number[1])
-        result=x/y
-        return str(result)
-    except:
-        return "Error:Invalid argements"
 
 #Communicate with the client
 def handle_client(conn):
