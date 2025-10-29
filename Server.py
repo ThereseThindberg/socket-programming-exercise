@@ -1,8 +1,11 @@
 import socket
 import sys
 from smart_tv import SmartTV
+import threading
 
 tv = SmartTV()
+clients = []           # list of all clients that are connected
+lock = threading.Lock()  #protecting when multipli clients 
 
 
 
@@ -86,45 +89,74 @@ def handle_command(command: str):
         return "Error: Unknown command"
 
 
+#  Send message to all clients, adding broadcasting , lock makes it so multiple stings change clients at the same time, tunring on and off and so on
+def broadcast(message, exclude_conn=None):
+    with lock:
+        for c in clients[:]:  # bruk kopi av lista i tilfelle noen kobles fra
+            if c == exclude_conn:
+                continue
+            try:
+                c.sendall(message.encode())
+            except:
+                clients.remove(c)
 
 
 
-#Communicate with the client
-def handle_client(conn):
+def handle_client(conn, addr):
+    with lock:
+        clients.append(conn)
+    print(f"[NEW CONNECTION] {addr} connected.")
+    conn.sendall(b"TV is off. Only command allowed is turn_on\n")
+
     try:
         while True:
-            data=conn.recv(1024)
-            if not data:
+            command = receive_command(conn)
+            if not command:
                 break
-            command = data.decode()
-            result = handle_command(command)
-            conn.sendall(result.encode())
+
+            response = handle_command(command)
+            conn.sendall(response.encode())
+
+            # Hvis en klient endrer kanal, informer alle andre
+            if command.lower().startswith("set_channel"):
+                broadcast(f"[Notification] Channel changed to {tv.get_channel()} by {addr}\n", exclude_conn=conn)
+
+            # Hvis noen skrur av TV-en
+            if command.lower() == "turn_off":
+                broadcast("[Notification] The TV has been turned OFF by someone.\n", exclude_conn=conn)
+                break
+
     except Exception as e:
         print("Error during client communication:", e)
+    finally:
+        with lock:
+            if conn in clients:
+                clients.remove(conn)
+        conn.close()
+        print(f"[DISCONNECTED] {addr}")
 
+
+# 
 def main():
     host = '127.0.0.1'
-    port= int(sys.argv[1]) if len(sys.argv) > 1 else 1238
-    server_socket=create_socket()
-    try: 
-        bind_socket(server_socket,host,port)
+    port = int(sys.argv[1]) if len(sys.argv) > 1 else 1238
+    server_socket = create_socket()
+
+    try:
+        bind_socket(server_socket, host, port)
         listen_for_connection(server_socket)
-        conn,addr=accept_connection(server_socket)   #accepting one connection at a time
-        print(f"Server connected with{addr}")
-        conn.sendall(b"TV is off. only command allowed id turn_on\n")
+        print("Waiting for clients...")
+
         while True:
-            command=receive_command(conn)   
-            if not command or command.lower()=="turn_off":
-                conn.sendall(b"The TV is turned off, Goodbye!\n")
-                break
-            response=handle_command(command)
-            conn.sendall((response).encode())
-    except:
-        print("Server error")
+            conn, addr = accept_connection(server_socket)
+            thread = threading.Thread(target=handle_client, args=(conn, addr))
+            thread.start()
+
+    except KeyboardInterrupt:
+        print("Server shutting down...")
     finally:
         close_socket(server_socket)
 
-if __name__ =="__main__":
-    main()
 
-    
+if __name__ == "__main__":
+    main()
